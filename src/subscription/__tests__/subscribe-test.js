@@ -77,7 +77,7 @@ describe('Subscribe', () => {
     subscription: SubscriptionType
   });
 
-  function createSubscription(pubsub, schema = emailSchema) {
+  function createSubscription(pubsub, schema = emailSchema, ast) {
     const data = {
       inbox: {
         emails: [
@@ -105,7 +105,7 @@ describe('Subscribe', () => {
       });
     }
 
-    const ast = parse(`
+    const defaultAst = parse(`
       subscription ($priority: Int = 0) {
         importantEmail(priority: $priority) {
           email {
@@ -126,7 +126,7 @@ describe('Subscribe', () => {
       sendImportantEmail,
       subscription: subscribe(
         schema,
-        ast,
+        ast || defaultAst,
         data
       ),
     };
@@ -545,22 +545,22 @@ describe('Subscribe', () => {
     });
   });
 
-  it('invalid query should result in error', async () => {
-    const invalidAST = parse(`
+  it('unknown field should result in closed subscription', async () => {
+    const ast = parse(`
       subscription {
-        invalidField
+        unknownField
       }
     `);
 
-    expect(() => {
-      subscribe(
-        emailSchema,
-        invalidAST,
-      );
-    }).to.throw('This subscription is not defined by the schema.');
+    const pubsub = new EventEmitter();
+
+    const { subscription } = createSubscription(pubsub, emailSchema, ast);
+
+    const payload = await subscription.next();
+    expect(payload).to.deep.equal({ done: true, value: undefined });
   });
 
-  it('throws when subscription definition doesnt return iterator', () => {
+  it('fails when subscription definition doesnt return iterator', async () => {
     const invalidEmailSchema = new GraphQLSchema({
       query: QueryType,
       subscription: new GraphQLObjectType({
@@ -574,18 +574,19 @@ describe('Subscribe', () => {
       })
     });
 
-    const ast = parse(`
-      subscription {
-        importantEmail
-      }
-    `);
+    const pubsub = new EventEmitter();
 
-    expect(() => {
-      subscribe(
-        invalidEmailSchema,
-        ast
-      );
-    }).to.throw('Subscription must return Async Iterable.');
+    const { subscription } = createSubscription(pubsub, invalidEmailSchema);
+
+    let caughtError;
+    try {
+      await subscription.next();
+    } catch (thrownError) {
+      caughtError = thrownError;
+    }
+    expect(
+      caughtError && caughtError.message
+    ).to.equal('Subscription must return Async Iterable. Returned: test');
   });
 
   it('expects to have subscribe on type definition with iterator', () => {
@@ -617,33 +618,196 @@ describe('Subscribe', () => {
     }).not.to.throw();
   });
 
-  it('should handle error thrown by subscribe method', () => {
-    const invalidEmailSchema = new GraphQLSchema({
+  it('should report error thrown by subscribe function', async () => {
+    const erroringEmailSchema = emailSchemaWithSubscribeFn(
+      function importantEmail() {
+        throw new Error('test error');
+      }
+    );
+
+    const subscription = subscribe(
+      erroringEmailSchema,
+      parse(`
+        subscription {
+          importantEmail
+        }
+      `)
+    );
+
+    const result = await subscription.next();
+
+    expect(result).to.deep.equal({
+      done: false,
+      value: {
+        errors: [
+          {
+            message: 'test error',
+            locations: [ { line: 3, column: 11 } ],
+            path: [ 'importantEmail' ]
+          }
+        ]
+      }
+    });
+
+    expect(
+      await subscription.next()
+    ).to.deep.equal({ value: undefined, done: true });
+  });
+
+  it('should report error returned by subscribe function', async () => {
+    const erroringEmailSchema = emailSchemaWithSubscribeFn(
+      function importantEmail() {
+        return new Error('test error');
+      }
+    );
+
+    const subscription = subscribe(
+      erroringEmailSchema,
+      parse(`
+        subscription {
+          importantEmail
+        }
+      `)
+    );
+
+    const result = await subscription.next();
+
+    expect(result).to.deep.equal({
+      done: false,
+      value: {
+        errors: [
+          {
+            message: 'test error',
+            locations: [ { line: 3, column: 11 } ],
+            path: [ 'importantEmail' ]
+          }
+        ]
+      }
+    });
+
+    expect(
+      await subscription.next()
+    ).to.deep.equal({ value: undefined, done: true });
+  });
+
+  it('should handle error during execuction of source event', async () => {
+    const erroringEmailSchema = new GraphQLSchema({
       query: QueryType,
       subscription: new GraphQLObjectType({
         name: 'Subscription',
         fields: {
           importantEmail: {
             type: GraphQLString,
-            subscribe: () => {
-              throw new Error('test error');
+            resolve(event) {
+              if (event === 'Goodbye') {
+                throw new Error('Never leave.');
+              }
+              return event;
+            },
+            subscribe: async function* importantEmail() {
+              yield 'Hello';
+              yield 'Goodbye';
             },
           },
         },
       })
     });
 
-    const ast = parse(`
-      subscription {
-        importantEmail
-      }
-    `);
+    const subscription = subscribe(
+      erroringEmailSchema,
+      parse(`
+        subscription {
+          importantEmail
+        }
+      `)
+    );
 
-    expect(() => {
-      subscribe(
-        invalidEmailSchema,
-        ast
-      );
-    }).to.throw('test error');
+    const payload1 = await subscription.next();
+    expect(payload1).to.jsonEqual({
+      done: false,
+      value: {
+        data: {
+          importantEmail: 'Hello'
+        }
+      }
+    });
+
+    const payload2 = await subscription.next();
+    expect(payload2).to.jsonEqual({
+      done: false,
+      value: {
+        errors: [
+          {
+            message: 'Never leave.',
+            locations: [ { line: 3, column: 11 } ],
+            path: [ 'importantEmail' ],
+          }
+        ],
+        data: {
+          importantEmail: null,
+        }
+      }
+    });
+  });
+
+  function emailSchemaWithSubscribeFn(subscribeFn) {
+    return new GraphQLSchema({
+      query: QueryType,
+      subscription: new GraphQLObjectType({
+        name: 'Subscription',
+        fields: {
+          importantEmail: {
+            type: GraphQLString,
+            resolve(event) {
+              return event;
+            },
+            subscribe: subscribeFn,
+          },
+        },
+      })
+    });
+  }
+
+  it('should pass through error thrown in source event stream', async () => {
+    const erroringEmailSchema = emailSchemaWithSubscribeFn(
+      async function* importantEmail() {
+        yield 'Hello';
+        throw new Error('test error');
+      }
+    );
+
+    const subscription = subscribe(
+      erroringEmailSchema,
+      parse(`
+        subscription {
+          importantEmail
+        }
+      `)
+    );
+
+    const payload1 = await subscription.next();
+    expect(payload1).to.jsonEqual({
+      done: false,
+      value: {
+        data: {
+          importantEmail: 'Hello'
+        }
+      }
+    });
+
+    let expectedError;
+    try {
+      await subscription.next();
+    } catch (error) {
+      expectedError = error;
+    }
+
+    expect(expectedError).to.deep.equal(new Error('test error'));
+
+    const payload2 = await subscription.next();
+    expect(payload2).to.jsonEqual({
+      done: true,
+      value: undefined
+    });
   });
 });
