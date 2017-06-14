@@ -48,7 +48,7 @@ declare function subscribe({|
   operationName?: ?string,
   fieldResolver?: ?GraphQLFieldResolver<any, any>,
   subscribeFieldResolver?: ?GraphQLFieldResolver<any, any>
-|}, ..._: []): AsyncIterator<ExecutionResult>;
+|}, ..._: []): Promise<AsyncIterator<ExecutionResult>>;
 /* eslint-disable no-redeclare */
 declare function subscribe(
   schema: GraphQLSchema,
@@ -59,8 +59,8 @@ declare function subscribe(
   operationName?: ?string,
   fieldResolver?: ?GraphQLFieldResolver<any, any>,
   subscribeFieldResolver?: ?GraphQLFieldResolver<any, any>
-): AsyncIterator<ExecutionResult>;
-export function subscribe(
+): Promise<AsyncIterator<ExecutionResult>>;
+export async function subscribe(
   argsOrSchema,
   document,
   rootValue,
@@ -74,7 +74,7 @@ export function subscribe(
   const args = arguments.length === 1 ? argsOrSchema : undefined;
   const schema = args ? args.schema : argsOrSchema;
   return args ?
-    subscribeImpl(
+    await subscribeImpl(
       schema,
       args.document,
       args.rootValue,
@@ -84,7 +84,7 @@ export function subscribe(
       args.fieldResolver,
       args.subscribeFieldResolver
     ) :
-    subscribeImpl(
+    await subscribeImpl(
       schema,
       document,
       rootValue,
@@ -96,7 +96,7 @@ export function subscribe(
     );
 }
 
-function subscribeImpl(
+async function subscribeImpl(
   schema,
   document,
   rootValue,
@@ -106,7 +106,7 @@ function subscribeImpl(
   fieldResolver,
   subscribeFieldResolver
 ) {
-  const subscription = createSourceEventStream(
+  const subscription = await createSourceEventStream(
     schema,
     document,
     rootValue,
@@ -158,7 +158,7 @@ export function createSourceEventStream(
   variableValues?: ?{[key: string]: mixed},
   operationName?: ?string,
   fieldResolver?: ?GraphQLFieldResolver<any, any>
-): AsyncIterable<mixed> {
+): Promise<AsyncIterable<mixed>> {
   // If arguments are missing or incorrect, throw an error.
   assertValidExecutionArguments(
     schema,
@@ -220,16 +220,18 @@ export function createSourceEventStream(
     info
   );
 
-  if (subscription instanceof Error) {
-    throw subscription;
-  }
+  return Promise.resolve(subscription).then(resolvedSubscription => {
+    if (resolvedSubscription instanceof Error) {
+      throw resolvedSubscription;
+    }
 
-  if (!isAsyncIterable(subscription)) {
-    throw new Error(
-      'Subscription must return Async Iterable. ' +
-        'Received: ' + String(subscription)
-    );
-  }
+    if (!isAsyncIterable(resolvedSubscription)) {
+      throw new Error(
+        'Subscription must return Async Iterable. ' +
+          'Received: ' + String(resolvedSubscription)
+      );
+    }
 
-  return (subscription: any);
+    return resolvedSubscription;
+  });
 }
