@@ -397,6 +397,7 @@ export type ScalarTypeDefinitionNode = {
   kind: 'ScalarTypeDefinition';
   loc?: Location;
   name: NameNode;
+  type?: ?NamedTypeNode;
   directives?: ?Array<DirectiveNode>;
 };
 

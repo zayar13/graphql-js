@@ -129,6 +129,7 @@ export type IntrospectionScalarType = {
   kind: 'SCALAR';
   name: string;
   description: ?string;
+  ofType: ?IntrospectionNamedTypeRef;
 };
 
 export type IntrospectionObjectType = {

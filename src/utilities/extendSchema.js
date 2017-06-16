@@ -285,6 +285,12 @@ export function extendSchema(
     return type;
   }
 
+  function getScalarTypeFromAST(node: NamedTypeNode): GraphQLScalarType {
+    const type = getTypeFromAST(node);
+    invariant(type instanceof GraphQLScalarType, 'Must be Scalar type.');
+    return type;
+  }
+
   function getInputTypeFromAST(node: NamedTypeNode): GraphQLInputType {
     return assertInputType(getTypeFromAST(node));
   }
@@ -478,16 +484,18 @@ export function extendSchema(
   }
 
   function buildScalarType(typeNode: ScalarTypeDefinitionNode) {
+    const ofType = typeNode.type && getScalarTypeFromAST(typeNode.type);
     return new GraphQLScalarType({
       name: typeNode.name.value,
       description: getDescription(typeNode),
+      ofType,
       serialize: id => id,
       // Note: validation calls the parse functions to determine if a
       // literal value is correct. Returning null would cause use of custom
       // scalars to always fail validation. Returning false causes them to
       // always pass validation.
-      parseValue: () => false,
-      parseLiteral: () => false,
+      parseValue: ofType ? null : () => false,
+      parseLiteral: ofType ? null : () => false,
     });
   }
 

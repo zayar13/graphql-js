@@ -194,6 +194,14 @@ export function buildClientSchema(
     return type;
   }
 
+  function getScalarType(typeRef: IntrospectionTypeRef): GraphQLScalarType {
+    const type = getType(typeRef);
+    invariant(
+      type instanceof GraphQLScalarType,
+      'Introspection must provide scalar type for custom scalars.'
+    );
+    return type;
+  }
 
   // Given a type's introspection result, construct the correct
   // GraphQLType instance.
@@ -223,16 +231,20 @@ export function buildClientSchema(
   function buildScalarDef(
     scalarIntrospection: IntrospectionScalarType
   ): GraphQLScalarType {
+    const ofType = scalarIntrospection.ofType ?
+      getScalarType(scalarIntrospection.ofType) :
+      undefined;
     return new GraphQLScalarType({
       name: scalarIntrospection.name,
       description: scalarIntrospection.description,
+      ofType,
       serialize: id => id,
       // Note: validation calls the parse functions to determine if a
       // literal value is correct. Returning null would cause use of custom
       // scalars to always fail validation. Returning false causes them to
       // always pass validation.
-      parseValue: () => false,
-      parseLiteral: () => false,
+      parseValue: ofType ? null : () => false,
+      parseLiteral: ofType ? null : () => false,
     });
   }
 

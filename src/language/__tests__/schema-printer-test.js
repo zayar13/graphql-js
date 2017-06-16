@@ -87,6 +87,8 @@ union AnnotatedUnionTwo @onUnion = A | B
 
 scalar CustomScalar
 
+scalar StringEncodedCustomScalar = String
+
 scalar AnnotatedScalar @onScalar
 
 enum Site {

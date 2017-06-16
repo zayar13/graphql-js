@@ -153,8 +153,9 @@ export function printType(type: GraphQLType): string {
 }
 
 function printScalar(type: GraphQLScalarType): string {
+  const ofType = type.ofType ? ` = ${type.ofType.name}` : '';
   return printDescription(type) +
-    `scalar ${type.name}`;
+    `scalar ${type.name}${ofType}`;
 }
 
 function printObject(type: GraphQLObjectType): string {

@@ -294,6 +294,7 @@ function resolveThunk<T>(thunk: Thunk<T>): T {
 export class GraphQLScalarType {
   name: string;
   description: ?string;
+  ofType: ?GraphQLScalarType;
 
   _scalarConfig: GraphQLScalarTypeConfig<*, *>;
 
@@ -301,6 +302,19 @@ export class GraphQLScalarType {
     assertValidName(config.name);
     this.name = config.name;
     this.description = config.description;
+    this.ofType = config.ofType || null;
+    if (this.ofType) {
+      const ofTypeName = this.ofType.name;
+      invariant(
+        ofTypeName === 'String' ||
+        ofTypeName === 'Int' ||
+        ofTypeName === 'Float' ||
+        ofTypeName === 'Boolean' ||
+        ofTypeName === 'ID',
+        `${this.name} may only be described in terms of a built-in scalar ` +
+        `type. However ${ofTypeName} is not a built-in scalar type.`
+      );
+    }
     invariant(
       typeof config.serialize === 'function',
       `${this.name} must provide "serialize" function. If this custom Scalar ` +
@@ -321,7 +335,8 @@ export class GraphQLScalarType {
   // Serializes an internal value to include in a response.
   serialize(value: mixed): mixed {
     const serializer = this._scalarConfig.serialize;
-    return serializer(value);
+    const serialized = serializer(value);
+    return this.ofType ? this.ofType.serialize(serialized) : serialized;
   }
 
   // Determines if an internal value is valid for this type.
@@ -332,7 +347,8 @@ export class GraphQLScalarType {
 
   // Parses an externally provided value to use as an input.
   parseValue(value: mixed): mixed {
-    const parser = this._scalarConfig.parseValue;
+    const parser = this._scalarConfig.parseValue ||
+      this.ofType && this.ofType.parseValue;
     return parser && !isNullish(value) ? parser(value) : undefined;
   }
 
@@ -344,7 +360,8 @@ export class GraphQLScalarType {
 
   // Parses an externally provided literal value to use as an input.
   parseLiteral(valueNode: ValueNode): mixed {
-    const parser = this._scalarConfig.parseLiteral;
+    const parser = this._scalarConfig.parseLiteral ||
+      this.ofType && this.ofType.parseLiteral;
     return parser ? parser(valueNode) : undefined;
   }
 
@@ -364,9 +381,10 @@ GraphQLScalarType.prototype.toJSON =
 export type GraphQLScalarTypeConfig<TInternal, TExternal> = {
   name: string;
   description?: ?string;
+  ofType?: ?GraphQLScalarType;
   serialize: (value: mixed) => ?TExternal;
-  parseValue?: (value: mixed) => ?TInternal;
-  parseLiteral?: (valueNode: ValueNode) => ?TInternal;
+  parseValue?: ?(value: mixed) => ?TInternal;
+  parseLiteral?: ?(valueNode: ValueNode) => ?TInternal;
 };
 
 

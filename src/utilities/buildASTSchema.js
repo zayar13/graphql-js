@@ -313,6 +313,12 @@ export function buildASTSchema(ast: DocumentNode): GraphQLSchema {
     return type;
   }
 
+  function produceScalarType(typeNode: TypeNode): GraphQLScalarType {
+    const type = produceType(typeNode);
+    invariant(type instanceof GraphQLScalarType, 'Expected Scalar type.');
+    return type;
+  }
+
   function typeDefNamed(typeName: string): GraphQLNamedType {
     if (innerTypeMap[typeName]) {
       return innerTypeMap[typeName];
@@ -434,16 +440,18 @@ export function buildASTSchema(ast: DocumentNode): GraphQLSchema {
   }
 
   function makeScalarDef(def: ScalarTypeDefinitionNode) {
+    const ofType = def.type && produceScalarType(def.type);
     return new GraphQLScalarType({
       name: def.name.value,
       description: getDescription(def),
-      serialize: () => null,
+      ofType,
+      serialize: id => id,
       // Note: validation calls the parse functions to determine if a
       // literal value is correct. Returning null would cause use of custom
       // scalars to always fail validation. Returning false causes them to
       // always pass validation.
-      parseValue: () => false,
-      parseLiteral: () => false,
+      parseValue: ofType ? null : () => false,
+      parseLiteral: ofType ? null : () => false,
     });
   }
 
