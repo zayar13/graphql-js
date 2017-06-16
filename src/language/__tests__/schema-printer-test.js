@@ -87,7 +87,7 @@ union AnnotatedUnionTwo @onUnion = A | B
 
 scalar CustomScalar
 
-scalar StringEncodedCustomScalar = String
+scalar StringEncodedCustomScalar as String
 
 scalar AnnotatedScalar @onScalar
 

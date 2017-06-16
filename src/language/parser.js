@@ -784,14 +784,14 @@ function parseOperationTypeDefinition(
 }
 
 /**
- * ScalarTypeDefinition : scalar Name ScalarOfType? Directives?
- * ScalarOfType : = NamedType
+ * ScalarTypeDefinition : scalar Name SerializeAsType? Directives?
+ * SerializeAsType : as NamedType
  */
 function parseScalarTypeDefinition(lexer: Lexer<*>): ScalarTypeDefinitionNode {
   const start = lexer.token;
   expectKeyword(lexer, 'scalar');
   const name = parseName(lexer);
-  const type = skip(lexer, TokenKind.EQUALS) ? parseNamedType(lexer) : null;
+  const type = skipKeyword(lexer, 'as') ? parseNamedType(lexer) : null;
   const directives = parseDirectives(lexer);
   return {
     kind: SCALAR_TYPE_DEFINITION,
@@ -1133,9 +1133,23 @@ function expect(lexer: Lexer<*>, kind: string): Token {
 }
 
 /**
- * If the next token is a keyword with the given value, return that token after
+ * If the next token is a keyword with the given value, return true after
  * advancing the lexer. Otherwise, do not change the parser state and return
  * false.
+ */
+function skipKeyword(lexer: Lexer<*>, value: string): boolean {
+  const token = lexer.token;
+  const match = token.kind === TokenKind.NAME && token.value === value;
+  if (match) {
+    lexer.advance();
+  }
+  return match;
+}
+
+/**
+ * If the next token is a keyword with the given value, return that token after
+ * advancing the lexer. Otherwise, do not change the parser state and throw
+ * an error.
  */
 function expectKeyword(lexer: Lexer<*>, value: string): Token {
   const token = lexer.token;
