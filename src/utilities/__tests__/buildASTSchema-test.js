@@ -27,10 +27,10 @@ import {
  * into an in-memory GraphQLSchema, and then finally
  * printing that GraphQL into the DSL
  */
-function cycleOutput(body) {
+function cycleOutput(body, options) {
   const ast = parse(body);
-  const schema = buildASTSchema(ast);
-  return printSchema(schema);
+  const schema = buildASTSchema(ast, options);
+  return printSchema(schema, options);
 }
 
 describe('Schema Builder', () => {
@@ -103,6 +103,37 @@ describe('Schema Builder', () => {
         query: Hello
       }
 
+      """This is a directive"""
+      directive @foo(
+        """It has an argument"""
+        arg: Int
+      ) on FIELD
+
+      """With an enum"""
+      enum Color {
+        RED
+
+        """Not a creative color"""
+        GREEN
+        BLUE
+      }
+
+      """What a great type"""
+      type Hello {
+        """And a field to boot"""
+        str: String
+      }
+    `;
+    const output = cycleOutput(body);
+    expect(output).to.equal(body);
+  });
+
+  it('Supports option for comment descriptions', () => {
+    const body = dedent`
+      schema {
+        query: Hello
+      }
+
       # This is a directive
       directive @foo(
         # It has an argument
@@ -124,7 +155,7 @@ describe('Schema Builder', () => {
         str: String
       }
     `;
-    const output = cycleOutput(body);
+    const output = cycleOutput(body, { commentDescriptions: true });
     expect(output).to.equal(body);
   });
 
@@ -543,21 +574,21 @@ describe('Schema Builder', () => {
     expect(schema.getType('MyEnum').getValues()).to.deep.equal([
       {
         name: 'VALUE',
-        description: '',
+        description: undefined,
         isDeprecated: false,
         deprecationReason: undefined,
         value: 'VALUE'
       },
       {
         name: 'OLD_VALUE',
-        description: '',
+        description: undefined,
         isDeprecated: true,
         deprecationReason: 'No longer supported',
         value: 'OLD_VALUE'
       },
       {
         name: 'OTHER_VALUE',
-        description: '',
+        description: undefined,
         isDeprecated: true,
         deprecationReason: 'Terrible reasons',
         value: 'OTHER_VALUE'

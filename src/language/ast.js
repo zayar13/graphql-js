@@ -398,6 +398,7 @@ export type TypeDefinitionNode =
 export type ScalarTypeDefinitionNode = {
   kind: 'ScalarTypeDefinition';
   loc?: Location;
+  description?: ?StringValueNode;
   name: NameNode;
   directives?: ?Array<DirectiveNode>;
 };
@@ -405,6 +406,7 @@ export type ScalarTypeDefinitionNode = {
 export type ObjectTypeDefinitionNode = {
   kind: 'ObjectTypeDefinition';
   loc?: Location;
+  description?: ?StringValueNode;
   name: NameNode;
   interfaces?: ?Array<NamedTypeNode>;
   directives?: ?Array<DirectiveNode>;
@@ -414,6 +416,7 @@ export type ObjectTypeDefinitionNode = {
 export type FieldDefinitionNode = {
   kind: 'FieldDefinition';
   loc?: Location;
+  description?: ?StringValueNode;
   name: NameNode;
   arguments: Array<InputValueDefinitionNode>;
   type: TypeNode;
@@ -423,6 +426,7 @@ export type FieldDefinitionNode = {
 export type InputValueDefinitionNode = {
   kind: 'InputValueDefinition';
   loc?: Location;
+  description?: ?StringValueNode;
   name: NameNode;
   type: TypeNode;
   defaultValue?: ?ValueNode;
@@ -432,6 +436,7 @@ export type InputValueDefinitionNode = {
 export type InterfaceTypeDefinitionNode = {
   kind: 'InterfaceTypeDefinition';
   loc?: Location;
+  description?: ?StringValueNode;
   name: NameNode;
   directives?: ?Array<DirectiveNode>;
   fields: Array<FieldDefinitionNode>;
@@ -440,6 +445,7 @@ export type InterfaceTypeDefinitionNode = {
 export type UnionTypeDefinitionNode = {
   kind: 'UnionTypeDefinition';
   loc?: Location;
+  description?: ?StringValueNode;
   name: NameNode;
   directives?: ?Array<DirectiveNode>;
   types: Array<NamedTypeNode>;
@@ -448,6 +454,7 @@ export type UnionTypeDefinitionNode = {
 export type EnumTypeDefinitionNode = {
   kind: 'EnumTypeDefinition';
   loc?: Location;
+  description?: ?StringValueNode;
   name: NameNode;
   directives?: ?Array<DirectiveNode>;
   values: Array<EnumValueDefinitionNode>;
@@ -456,6 +463,7 @@ export type EnumTypeDefinitionNode = {
 export type EnumValueDefinitionNode = {
   kind: 'EnumValueDefinition';
   loc?: Location;
+  description?: ?StringValueNode;
   name: NameNode;
   directives?: ?Array<DirectiveNode>;
 };
@@ -463,6 +471,7 @@ export type EnumValueDefinitionNode = {
 export type InputObjectTypeDefinitionNode = {
   kind: 'InputObjectTypeDefinition';
   loc?: Location;
+  description?: ?StringValueNode;
   name: NameNode;
   directives?: ?Array<DirectiveNode>;
   fields: Array<InputValueDefinitionNode>;
@@ -477,6 +486,7 @@ export type TypeExtensionDefinitionNode = {
 export type DirectiveDefinitionNode = {
   kind: 'DirectiveDefinition';
   loc?: Location;
+  description?: ?StringValueNode;
   name: NameNode;
   arguments?: ?Array<InputValueDefinitionNode>;
   locations: Array<NameNode>;

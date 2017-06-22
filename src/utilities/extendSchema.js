@@ -95,10 +95,17 @@ import type {
  *
  * This algorithm copies the provided schema, applying extensions while
  * producing the copy. The original schema remains unaltered.
+ *
+ * Accepts options as a third argument:
+ *
+ *    - commentDescriptions:
+ *        Provide true to use preceding comments as the description.
+ *
  */
 export function extendSchema(
   schema: GraphQLSchema,
-  documentAST: DocumentNode
+  documentAST: DocumentNode,
+  options?: ?{ commentDescriptions?: boolean }
 ): GraphQLSchema {
   invariant(
     schema instanceof GraphQLSchema,
@@ -415,7 +422,7 @@ export function extendSchema(
             );
           }
           newFieldMap[fieldName] = {
-            description: getDescription(field),
+            description: getDescription(field, options),
             type: buildOutputFieldType(field.type),
             args: buildInputValues(field.arguments),
             deprecationReason: getDeprecationReason(field),
@@ -453,7 +460,7 @@ export function extendSchema(
   function buildObjectType(typeNode: ObjectTypeDefinitionNode) {
     return new GraphQLObjectType({
       name: typeNode.name.value,
-      description: getDescription(typeNode),
+      description: getDescription(typeNode, options),
       interfaces: () => buildImplementedInterfaces(typeNode),
       fields: () => buildFieldMap(typeNode),
     });
@@ -462,7 +469,7 @@ export function extendSchema(
   function buildInterfaceType(typeNode: InterfaceTypeDefinitionNode) {
     return new GraphQLInterfaceType({
       name: typeNode.name.value,
-      description: getDescription(typeNode),
+      description: getDescription(typeNode, options),
       fields: () => buildFieldMap(typeNode),
       resolveType: cannotExecuteExtendedSchema,
     });
@@ -471,7 +478,7 @@ export function extendSchema(
   function buildUnionType(typeNode: UnionTypeDefinitionNode) {
     return new GraphQLUnionType({
       name: typeNode.name.value,
-      description: getDescription(typeNode),
+      description: getDescription(typeNode, options),
       types: typeNode.types.map(getObjectTypeFromAST),
       resolveType: cannotExecuteExtendedSchema,
     });
@@ -480,7 +487,7 @@ export function extendSchema(
   function buildScalarType(typeNode: ScalarTypeDefinitionNode) {
     return new GraphQLScalarType({
       name: typeNode.name.value,
-      description: getDescription(typeNode),
+      description: getDescription(typeNode, options),
       serialize: id => id,
       // Note: validation calls the parse functions to determine if a
       // literal value is correct. Returning null would cause use of custom
@@ -494,12 +501,12 @@ export function extendSchema(
   function buildEnumType(typeNode: EnumTypeDefinitionNode) {
     return new GraphQLEnumType({
       name: typeNode.name.value,
-      description: getDescription(typeNode),
+      description: getDescription(typeNode, options),
       values: keyValMap(
         typeNode.values,
         enumValue => enumValue.name.value,
         enumValue => ({
-          description: getDescription(enumValue),
+          description: getDescription(enumValue, options),
           deprecationReason: getDeprecationReason(enumValue),
         }),
       ),
@@ -509,7 +516,7 @@ export function extendSchema(
   function buildInputObjectType(typeNode: InputObjectTypeDefinitionNode) {
     return new GraphQLInputObjectType({
       name: typeNode.name.value,
-      description: getDescription(typeNode),
+      description: getDescription(typeNode, options),
       fields: () => buildInputValues(typeNode.fields),
     });
   }
@@ -538,7 +545,7 @@ export function extendSchema(
       field => field.name.value,
       field => ({
         type: buildOutputFieldType(field.type),
-        description: getDescription(field),
+        description: getDescription(field, options),
         args: buildInputValues(field.arguments),
         deprecationReason: getDeprecationReason(field),
       })
@@ -553,7 +560,7 @@ export function extendSchema(
         const type = buildInputFieldType(value.type);
         return {
           type,
-          description: getDescription(value),
+          description: getDescription(value, options),
           defaultValue: valueFromAST(value.defaultValue, type)
         };
       }

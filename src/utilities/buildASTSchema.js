@@ -10,6 +10,7 @@
 
 import invariant from '../jsutils/invariant';
 import keyValMap from '../jsutils/keyValMap';
+import removeIndentation from '../jsutils/removeIndentation';
 import { valueFromAST } from './valueFromAST';
 import { TokenKind } from '../language/lexer';
 import { parse } from '../language/parser';
@@ -21,6 +22,7 @@ import * as Kind from '../language/kinds';
 import type {
   Location,
   DocumentNode,
+  StringValueNode,
   TypeNode,
   NamedTypeNode,
   SchemaDefinitionNode,
@@ -125,8 +127,17 @@ function getNamedTypeNode(typeNode: TypeNode): NamedTypeNode {
  *
  * Given that AST it constructs a GraphQLSchema. The resulting schema
  * has no resolve methods, so execution will use default resolvers.
+ *
+ * Accepts options as a second argument:
+ *
+ *    - commentDescriptions:
+ *        Provide true to use preceding comments as the description.
+ *
  */
-export function buildASTSchema(ast: DocumentNode): GraphQLSchema {
+export function buildASTSchema(
+  ast: DocumentNode,
+  options?: ?{ commentDescriptions?: boolean }
+): GraphQLSchema {
   if (!ast || ast.kind !== Kind.DOCUMENT) {
     throw new Error('Must provide a document ast.');
   }
@@ -270,7 +281,7 @@ export function buildASTSchema(ast: DocumentNode): GraphQLSchema {
   ): GraphQLDirective {
     return new GraphQLDirective({
       name: directiveNode.name.value,
-      description: getDescription(directiveNode),
+      description: getDescription(directiveNode, options),
       locations: directiveNode.locations.map(
         node => ((node.value: any): DirectiveLocationEnum)
       ),
@@ -356,7 +367,7 @@ export function buildASTSchema(ast: DocumentNode): GraphQLSchema {
     const typeName = def.name.value;
     return new GraphQLObjectType({
       name: typeName,
-      description: getDescription(def),
+      description: getDescription(def, options),
       fields: () => makeFieldDefMap(def),
       interfaces: () => makeImplementedInterfaces(def),
     });
@@ -370,7 +381,7 @@ export function buildASTSchema(ast: DocumentNode): GraphQLSchema {
       field => field.name.value,
       field => ({
         type: produceOutputType(field.type),
-        description: getDescription(field),
+        description: getDescription(field, options),
         args: makeInputValues(field.arguments),
         deprecationReason: getDeprecationReason(field)
       })
@@ -390,7 +401,7 @@ export function buildASTSchema(ast: DocumentNode): GraphQLSchema {
         const type = produceInputType(value.type);
         return {
           type,
-          description: getDescription(value),
+          description: getDescription(value, options),
           defaultValue: valueFromAST(value.defaultValue, type)
         };
       }
@@ -401,7 +412,7 @@ export function buildASTSchema(ast: DocumentNode): GraphQLSchema {
     const typeName = def.name.value;
     return new GraphQLInterfaceType({
       name: typeName,
-      description: getDescription(def),
+      description: getDescription(def, options),
       fields: () => makeFieldDefMap(def),
       resolveType: cannotExecuteSchema,
     });
@@ -410,12 +421,12 @@ export function buildASTSchema(ast: DocumentNode): GraphQLSchema {
   function makeEnumDef(def: EnumTypeDefinitionNode) {
     const enumType = new GraphQLEnumType({
       name: def.name.value,
-      description: getDescription(def),
+      description: getDescription(def, options),
       values: keyValMap(
         def.values,
         enumValue => enumValue.name.value,
         enumValue => ({
-          description: getDescription(enumValue),
+          description: getDescription(enumValue, options),
           deprecationReason: getDeprecationReason(enumValue)
         })
       ),
@@ -427,7 +438,7 @@ export function buildASTSchema(ast: DocumentNode): GraphQLSchema {
   function makeUnionDef(def: UnionTypeDefinitionNode) {
     return new GraphQLUnionType({
       name: def.name.value,
-      description: getDescription(def),
+      description: getDescription(def, options),
       types: def.types.map(t => produceObjectType(t)),
       resolveType: cannotExecuteSchema,
     });
@@ -436,7 +447,7 @@ export function buildASTSchema(ast: DocumentNode): GraphQLSchema {
   function makeScalarDef(def: ScalarTypeDefinitionNode) {
     return new GraphQLScalarType({
       name: def.name.value,
-      description: getDescription(def),
+      description: getDescription(def, options),
       serialize: () => null,
       // Note: validation calls the parse functions to determine if a
       // literal value is correct. Returning null would cause use of custom
@@ -450,7 +461,7 @@ export function buildASTSchema(ast: DocumentNode): GraphQLSchema {
   function makeInputObjectDef(def: InputObjectTypeDefinitionNode) {
     return new GraphQLInputObjectType({
       name: def.name.value,
-      description: getDescription(def),
+      description: getDescription(def, options),
       fields: () => makeInputValues(def.fields),
     });
   }
@@ -468,16 +479,35 @@ export function getDeprecationReason(
 }
 
 /**
- * Given an ast node, returns its string description based on a contiguous
- * block full-line of comments preceding it.
+ * Given an ast node, returns its string description.
+ *
+ * Accepts options as a second argument:
+ *
+ *    - commentDescriptions:
+ *        Provide true to use preceding comments as the description.
+ *
  */
-export function getDescription(node: { loc?: Location }): ?string {
+export function getDescription(
+  node: { loc?: Location, description?: ?StringValueNode },
+  options?: ?{ commentDescriptions?: boolean }
+): void | string {
+  if (node.description) {
+    return node.description.value;
+  }
+  if (options && options.commentDescriptions) {
+    const rawValue = getLeadingCommentBlock(node);
+    if (rawValue !== undefined) {
+      return removeIndentation('\n' + rawValue);
+    }
+  }
+}
+
+function getLeadingCommentBlock(node: { loc?: Location }): void | string {
   const loc = node.loc;
   if (!loc) {
     return;
   }
   const comments = [];
-  let minSpaces;
   let token = loc.startToken.prev;
   while (
     token &&
@@ -487,17 +517,10 @@ export function getDescription(node: { loc?: Location }): ?string {
     token.line !== token.prev.line
   ) {
     const value = String(token.value);
-    const spaces = leadingSpaces(value);
-    if (minSpaces === undefined || spaces < minSpaces) {
-      minSpaces = spaces;
-    }
     comments.push(value);
     token = token.prev;
   }
-  return comments
-    .reverse()
-    .map(comment => comment.slice(minSpaces))
-    .join('\n');
+  return comments.reverse().join('\n');
 }
 
 /**
@@ -506,17 +529,6 @@ export function getDescription(node: { loc?: Location }): ?string {
  */
 export function buildSchema(source: string | Source): GraphQLSchema {
   return buildASTSchema(parse(source));
-}
-
-// Count the number of spaces on the starting side of a string.
-function leadingSpaces(str) {
-  let i = 0;
-  for (; i < str.length; i++) {
-    if (str[i] !== ' ') {
-      break;
-    }
-  }
-  return i;
 }
 
 function cannotExecuteSchema() {

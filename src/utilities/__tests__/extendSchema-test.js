@@ -136,11 +136,27 @@ describe('extendSchema', () => {
   it('can describe the extended fields', async () => {
     const ast = parse(`
       extend type Query {
-        # New field description.
+        "New field description."
         newField: String
       }
     `);
     const extendedSchema = extendSchema(testSchema, ast);
+
+    expect(
+      extendedSchema.getType('Query').getFields().newField.description
+    ).to.equal('New field description.');
+  });
+
+  it('can optionally describe the extended fields with comments', async () => {
+    const ast = parse(`
+      extend type Query {
+        # New field description.
+        newField: String
+      }
+    `);
+    const extendedSchema = extendSchema(testSchema, ast, {
+      commentDescriptions: true
+    });
 
     expect(
       extendedSchema.getType('Query').getFields().newField.description
@@ -219,7 +235,7 @@ describe('extendSchema', () => {
     expect(deprecatedEnumDef.getValues()).to.deep.equal([
       {
         name: 'DEPRECATED',
-        description: '',
+        description: undefined,
         isDeprecated: true,
         deprecationReason: 'do not use',
         value: 'DEPRECATED'
